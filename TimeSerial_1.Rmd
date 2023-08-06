@@ -1,0 +1,136 @@
+---
+title: "Time_serial_01"
+author: "Yuanyuan Qin"
+date: "2023-08-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## plot the quarterly visitors to NZ from 1998Q1 to 2023Q1
+
+```{r cars}
+library(readr)
+library(ggplot2)
+library(stats)
+library (zoo)
+
+# Read the data from CSV file
+data <- read_csv("Visitor_arrival_Total_NZ.csv", show_col_types = FALSE)
+head(data)
+```
+
+## Make sure the time column is the right year/quarter format, that could be recognized by R. Then convert the data into the time serial data
+
+```{r}
+# Create a time series object
+ts_data <- ts(data$actual_visitor,start = 1998.1, frequency = 4)
+head(ts_data)
+```
+
+## Plot with ggplot with dataframe input
+```{r}
+# Convert the time series object back to a data frame for ggplot
+ts_data_df <- data.frame(quarter = time(ts_data), actual_visitor = ts_data)
+
+# Plot the time series
+ggplot(data, aes(x = quarter, y = actual_visitor)) +
+  geom_line(size = 0.8) +
+  labs(title = "   Quarterly Total Visitors' Arrivals in New Zealand (1998Q1 - 2023Q1)",
+       y = "Actual Visitors") +
+  theme_minimal()+
+  theme(axis.title.x = element_blank(),
+        plot.title = element_text(size = 14, face = "bold"))
+```
+## Make a scatterplot of the values at time t against their lag 1 values. Repeat for the values at time t against their lag 2, lag 3, and lag 4 values
+```{r}
+# Plot the lag plots for lag 1 to 4 using a loop
+lag1 <- lag(ts_data, 1)
+lag2 <- lag(ts_data, 2)
+lag3 <- lag(ts_data, 3)
+lag4 <- lag(ts_data, 4)
+
+# Combine the original and lagged values into a data frame
+lag_data <- data.frame(Y_t = ts_data, Lag1 = lag1, Lag2 = lag2, Lag3 = lag3, Lag4 = lag4)
+
+par(mfrow = c(2, 2))
+
+# Create scatter plots for each lagged value against the original value
+plot(Lag1 ~ Y_t, data = lag_data, type = "n", xlab = "Y(t)", ylab = "Lag1")
+points(Lag1 ~ Y_t, data = lag_data, pch = 16)
+
+plot(Lag2 ~ Y_t, data = lag_data, type = "n", xlab = "Y(t)", ylab = "Lag2")
+points(Lag2 ~ Y_t, data = lag_data, pch = 16)
+
+plot(Lag3 ~ Y_t, data = lag_data, type = "n", xlab = "Y(t)", ylab = "Lag3")
+points(Lag3 ~ Y_t, data = lag_data, pch = 16)
+
+plot(Lag4 ~ Y_t, data = lag_data, type = "n", xlab = "Y(t)", ylab = "Lag4")
+points(Lag4 ~ Y_t, data = lag_data, pch = 16)
+
+par(mfrow = c(1, 1))
+
+
+```
+## Create ACF plot
+
+```{r}
+acf_plot <- acf(ts_data, lag.max = 12, plot = TRUE)
+
+# Show the ACF plot
+print(acf_plot)
+
+```
+## create and plot first_difference based on orignal dataset
+
+```{r}
+# Calculate the first differences of the time series
+first_diff <- diff(ts_data)
+
+par(cex.axis = 0.8)
+
+# Plot the first differences time series
+plot(ts_data, main = "Original Time Series",
+     xlab = "Quarter", ylab = "Actual Visitors")
+
+options(scipen = 100)
+# Plot the time series of first differences
+plot(first_diff, main = "Time Series of First Differences",
+     xlab = "Quarter", ylab = "First Differences")
+# Add a reference line at y=0 in green color
+abline(h = 0, col = "green")
+
+```
+
+## check the ACF plot of the first difference time serial set
+
+```{r}
+# Calculate the ACF of the first differences
+acf_plot <- acf(first_diff, lag.max = 12, plot = TRUE)
+
+# Show the ACF plot
+print(acf_plot)
+
+```
+## Use seasonal difference on the original time serial
+
+```{r}
+# Take seasonal differences
+seasonal_diff <- diff(ts_data, lag = 4)
+
+options(scipen = 100)
+# Plot the time series of first differences
+plot(seasonal_diff, main = "Time Series of Seasonal Differences",
+     xlab = "Quarter", ylab = "Seasonal Differences")
+# Add a reference line at y=0 in green color
+abline(h = 0, col = "green")
+
+# Calculate the ACF of the first differences
+acf_plot <- acf(seasonal_diff, lag.max = 12, plot = TRUE)
+
+# Show the ACF plot
+print(acf_plot)
+
+```
