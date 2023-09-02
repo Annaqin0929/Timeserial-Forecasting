@@ -1,0 +1,343 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+Q1)a)
+
+
+
+```{r}
+
+library(readr)
+library(xts)
+library(psych)
+library(lubridate)
+
+data <- read_delim("RAINFALL.dat", delim = ",", col_names = c("DateTime", "rainfall"))
+
+print(data)
+
+# Convert DateTime column to POSIXct format
+
+data$DateTime <- as.POSIXct(data$DateTime, format = "%d%b%y:%H")
+
+#Another way to get the datatime
+#data$DateTime <-dmy_hm(data$DateTime)
+#local_tz <- Sys.timezone()
+#data$DateTime <- with_tz(data$DateTime, tzone = local_tz)
+
+# Create an xts date-time series object
+
+date_time_series <- xts(data$rainfall, order.by = data$DateTime)
+
+# Convert xts object to data frame and rearrange columns
+
+data_df <- data.frame(DateTime = index(date_time_series), rainfall = coredata(date_time_series))
+
+
+headTail(data_df, top = 20, bottom = 20,ellipsis = FALSE)
+
+
+
+```
+
+
+```{r}
+print(data_df)
+```
+
+
+
+
+Q1)b)
+
+
+```{r}
+
+library(dplyr)
+
+# Create a sequence of hourly timestamps for the year 1992
+
+all_hours_1992 <- data.frame(DateTime = seq(
+  from = as.POSIXct("1992-01-01 00:00:00"), 
+  to = as.POSIXct("1992-12-31 23:00:00"), 
+  by = "hour"))
+
+# Merge the complete time series with the original data using a left join
+
+complete_time_series <- all_hours_1992 %>%
+  left_join(data_df, by = "DateTime") %>%
+  mutate(rainfall = ifelse(is.na(rainfall), 0, rainfall))
+
+headTail(complete_time_series, top = 20, bottom = 20, ellipsis = FALSE)
+
+```
+
+```{r}
+print(complete_time_series)
+```
+
+
+
+
+Q1)C)
+
+```{r}
+
+plot(complete_time_series$DateTime, complete_time_series$rainfall, type = "l",
+     xlab = "Date and Time", ylab = "Rainfall Value",
+     main = "Complete Time Series of Hourly Rainfall", col = "red")
+
+
+```
+Q1)d)
+
+```{r}
+# Count the number of hours with zero rainfall
+zero_rainfall_count <- sum(complete_time_series$rainfall == 0)
+
+# Calculate the total number of hours
+total_hours <- nrow(complete_time_series)
+
+# Calculate the percentage of hours with zero rainfall
+percentage_zero_rainfall <- (zero_rainfall_count / total_hours) * 100
+
+
+cat("Percentage of hours with zero rainfall:", percentage_zero_rainfall, "%\n")
+
+
+```
+Comment:
+
+The percentage of zero rainfall in every hour of the full year 1992 is 88.2%
+
+
+
+```{r}
+# Convert the rainfall column to numeric
+complete_time_series$rainfall <- as.numeric(complete_time_series$rainfall)
+
+# Calculate the total rainfall
+total_rainfall <- sum(complete_time_series$rainfall, na.rm = TRUE)
+
+# Calculate the total hours in the complete series
+total_hours <- nrow(complete_time_series)
+
+# Calculate the percentage of total rainfall
+percentage_total_rainfall <- (total_rainfall / total_hours) * 100
+
+
+cat("Percentage of total rainfall:", percentage_total_rainfall, "%\n")
+
+```
+
+Q1)e)
+
+
+
+```{r}
+
+library(ggplot2)
+
+
+acf_plot <- acf(complete_time_series$rainfall, lag.max = 48, main = "ACF Plot of Rainfall")
+
+
+```
+
+
+```{r}
+acf_plot <- acf(complete_time_series$rainfall, lag.max = 100,  main = "ACF Plot of Rainfall")
+
+```
+
+
+Comments:
+
+The ACF plot helps us understand how each value in a series is related to its previous values. In the case of rainfall data:The ACF plot's x axis shows the lag between the current rainfall measurement and the one before it.The vertical y axis indicates how strongly the current rainfall value is related to the past value at a given lag.The blue dashed line in the graph represents the significance level. If the correlation coefficient is above the dashed line, then the correlation is statistically significant.
+
+In this case, the correlation coefficient at lag 1 is above the dashed line, so the correlation between the current value of rainfall and the previous value of rainfall is statistically significant. A peak at lag 0 means that the current value of the peak is perfectly correlated with itself. This means that the peak does not change over time.The ACF plot for rainfall data typically shows a peak at lag 1, which indicates that there is a positive correlation between the current value of rainfall and the previous value of rainfall.Here at lag 1 (which means comparing rainfall from one hour ago), there's often a higher correlation. This makes sense because rainfall can have a connection to recent rainfall. The ACF plot also shows some smaller peaks at other lags, but these peaks are not as significant as the peak at lag 1. This indicates that there is no significant correlation between rainfall and previous values of rainfall over longer periods of time.
+
+Overall, the ACF plot for hourly rainfall data shows that there is a positive correlation between the current value of rainfall and the previous value of rainfall. However, there is no significant correlation between rainfall and previous values of rainfall over longer periods of time. 
+
+
+Q1)f)
+
+
+```{r}
+
+# Create a daily time series by summing up hourly rainfall for each day
+
+daily_data_complete_ts <- complete_time_series %>%
+  mutate(Date = as.Date(DateTime)) %>%
+  filter(Date != as.Date("1991-12-31")) %>%
+  group_by(Date) %>%
+  summarize(DailyRainfall = sum(rainfall, na.rm = TRUE))
+#print(daily_data_complete_ts)
+
+headTail(daily_data_complete_ts, top = 20, bottom = 20, ellipsis = FALSE)
+
+```
+
+
+
+```{r}
+
+plot(daily_data_complete_ts$Date, daily_data_complete_ts$DailyRainfall, type = "l",
+     xlab = "Date", ylab = "Daily Rainfall",
+     main = "Complete Time Series of Daily Rainfall", col = "blue")
+
+```
+
+Q1)g)
+
+```{r}
+acf_plot <- acf(daily_data_complete_ts$DailyRainfall, lag.max = 12, main = "ACF Plot of Daily Rainfall")
+
+
+```
+
+Comments:
+
+According to this ACF plot, it is noticed that a prominent peak at lag 0. This peak indicates that the value at the current point in time is perfectly correlated with itself, which is expected because a value remains constant over time.The correlation coefficient at lag 0 is always 1, which is the highest possible correlation coefficient. 
+
+The current value of the time series is strongly correlated with the value of the time series one time step ago (lag 1). This means that there is a tendency for the time series to stay the same over one time step.Other smaller peaks at different lags might also appear, but these are generally not as significant as the peak at lag 1. These smaller peaks suggest the presence of some correlation between the current observation and past observations at those specific lags. However, these correlations are typically not strong enough to be statistically significant.The correlation between the current value and previous values of the time series decreases over longer periods of time. This means that there is less predictability of the time series over longer periods of time.
+
+Overall, the ACF plot shows that the time series is correlated with itself over short periods of time, but not over longer periods of time.
+
+
+
+
+Comparison:
+
+
+When we compare the ACF plots of hourly rainfall and daily rainfall data we can see that there is a high peak in the starting lags ,specifically there is higher correlation in lag 1 for hourly rainfall data than the lag 1 in daily rainfall data.But in both plots, as time progresses, the correlation between the current value and past values of the time series wanes which indicates the time series maintains correlation within short time frame, yet this correlation diminishes as the time interval extends. This finding implies that both the time series is more interrelated over short time intervals, while the correlation weakens over longer time spans.
+
+In summary, both plots highlight the prominence of short-term correlations, particularly at lag 1. Both ACF plots acknowledge the presence of lesser correlations at other lags. Overall, the ACF plot indicates strong short-term correlations while revealing a diminishing correlation over extended periods, aligning with the statements that there is no significant correlation between rainfall and past values over longer duration.
+
+##question 2
+2.a
+```{r}
+library(forecast)
+
+# Load CSV file
+data <- read.csv("Question2data.csv", header = TRUE)
+head(data)
+
+# report if there is missing values
+missing_values <- colSums(is.na(data))
+print(missing_values)
+
+```
+# explore the ACF and PACF
+```{r}
+
+# List of series names
+series_names <- c("Series.A", "Series.B", "Series.C", "Series.D")
+
+# Function to plot ACF and PACF for a series
+
+plot_acf_pacf <- function(series_name) {
+  series <- ts(data[[series_name]])
+  acf_data <- acf(series, lag.max = 12)
+  pacf_data <- pacf(series, lag.max = 12)
+  
+  par(mfrow = c(1, 2))
+  plot(acf_data, main = paste("ACF for", series_name))
+  plot(pacf_data, main = paste("PACF for", series_name))
+  par(mfrow = c(1, 1))
+}
+
+# Loop through each series and plot ACF and PACF
+for (i in 1:length(series_names)) {
+  plot_acf_pacf(series_names[i])
+}
+```
+
+2.b
+Fit the ARMA model
+Serial.A :AR1 model, c(1, 0, 2) 
+Serial.B : MA1 model, c(2, 0, 1)
+Serial.C : ARMA model, c(1, 0, 1)
+Serial.D : ARMA model, c(2, 0, 1)
+```{r}
+# Fit ARMA model for Serial A
+series_A <- ts(data$Series.A)
+arma_model_serialA <- arima(series_A, order = c(1, 0, 2))
+
+print("Fitted ARMA model for Serial A:")
+print(arma_model_serialA)
+```
+##Residual analysis
+```{r}
+# Ljung Box test: if p > 0.05, the residual is white noise & residual is not correlated with its lag value in the time serial
+tsdiag(arma_model_serialA)
+```
+# Fit ARMA model for Serial B
+```{r}
+
+series_B <- ts(data$Series.B)
+arma_model_serialB <- arima(series_B, order = c(2, 0, 1))
+
+print("Fitted ARMA model for Serial B:")
+print(arma_model_serialB)
+
+```
+#Residual analysis
+```{r}
+tsdiag(arma_model_serialB)
+```
+# Fit ARMA model for Serial C
+```{r}
+
+series_C <- ts(data$Series.C)
+arma_model_serialC <- arima(series_C, order = c(2, 0, 1))
+
+print("Fitted ARMA model for Serial C:")
+print(arma_model_serialC)
+```
+#Residual analysis
+```{r}
+tsdiag(arma_model_serialC)
+
+```
+# Fit ARMA model for Serial D
+```{r}
+series_D <- ts(data$Series.D)
+arma_model_serialD <- arima(series_D, order = c(2, 0, 2))
+
+print("Fitted ARMA model for Serial D:")
+print(arma_model_serialD)
+```
+#Residual analysis
+```{r}
+tsdiag(arma_model_serialD)
+
+```
+## 2.c 
+Serial A ARMA equation:
+$$
+x_t = -0.8567 x_{t-1} + 0.1323 w_{t-1} + 0.1454 w_{t-2} - 0.0026 + w_t
+$$
+Serial B ARMA equation:
+$$
+x_t = -0.1288 x_{t-1} - 0.0503 x_{t-2} + 0.6342 w_{t-1} + 0.0613 + w_t
+$$
+Serial C ARMA equation:
+$$
+x_t = 0.0871 x_{t-1} + 0.0762 x_{t-2} + 0.6558 w_{t-1} + 0.0351 + w_t
+$$
+Serial D ARMA equation:
+$$
+x_t = 0.4012 x_{t-1} - 0.1332 x_{t-2} - 0.0339 w_{t-1} + 0.3417 w_{t-2} + 0.1353 + w_t
+$$
+
+
+
+
+
+
+ 
