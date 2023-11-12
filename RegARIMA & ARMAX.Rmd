@@ -1,0 +1,371 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+## Assignment 5 --- Regression models: ARMAX and RegARIMA
+
+Author: Anna (Yuanyuan) Qin
+UCID: 43865058
+Date: Oct.20, 2023
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(forecast)
+library(tseries)
+library(seasonal)
+library(zoo)
+library(ggplot2)
+library(readr)
+library(stats)
+library(lubridate)
+library(astsa)
+library(seasonalview)
+```
+
+#### Load monthly NZ visitor data
+Transform it into a time series and then plot it.
+
+```{r}
+data <- read_csv("Visitor_Monthly.csv", show_col_types = FALSE)
+head(data)
+tail(data)
+
+# Create a time series object
+data$Date <- as.Date(data$Date, format = "%Y-%m-%d")
+data$Year <- year(data$Date)
+data$Month <- month(data$Date)
+
+ts_data <- ts(data$Actual_Counts, start = c(1980, 1), frequency = 12)
+
+ts.plot(ts_data,col="purple",lwd=1)
+
+start(ts_data)
+end(ts_data)
+```
+Split visitor time serial data into 3 sets:
+
+1. Serial I: 2020/04 - 2023/04  (ARMAX)
+
+2. Serial II: 2000/01 - 2023/04 (RegARIMA: X-13ARIMA-SEATS)
+
+3. Validation serial: 2023/05, 2023/06 and 2023/07
+
+
+```{r}
+
+ts1 <- window(ts_data, start = c(2020, 4), end = c(2023, 4))
+ts.plot(ts1,col="darkred",lwd=1)
+head(ts1)
+tail(ts1)
+length(ts1)
+
+```
+```{r}
+
+ts2 <- window(ts_data, start = c(1980, 1), end = c(2023, 4))
+ts.plot(ts2,col="darkgreen",lwd=1)
+grid(col = "lightgray", lty = "dotted")
+
+head(ts2)
+tail(ts2)
+
+```
+
+####Test set ( visitors of the recent 3 months )
+
+```{r}
+
+ts_test <- window(ts_data, start = c(2023, 5), end = c(2023, 7))
+log(ts_test) 
+```
+#### USE ARMAX for serial I
+
+```{r}
+
+acf(ts1, col="red",lwd=3, lag.max = 48)
+pacf(ts1, col="green",lwd=3, lag.max = 48)
+
+```
+#### ADF test 
+```{r}
+
+ts1_lg <- log(ts1)
+
+ts.plot(ts1_lg,col="darkred",lwd=1)
+grid(col = "lightgray", lty = "dotted")
+
+acf(ts1_lg, col="red",lwd=3, lag.max = 48)
+pacf(ts1_lg, col="green",lwd=3, lag.max = 48)
+
+```
+Explore with ARIMA first
+
+```{r}
+
+ts1_diff <- diff(ts1)
+
+acf(ts1_diff, lag.max = 48)
+pacf(ts1_diff, lag.max = 48)
+
+```
+```{r}
+adf.test(ts1_lg)
+
+```
+
+
+```{r}
+
+ts1_ARMA <- arima(ts1_lg , order=c(1,0,1))
+
+summary(ts1_ARMA)
+
+ts.plot(ts1_ARMA$residuals)
+
+acf(ts1_ARMA$residuals, lag.max = 48)
+
+pacf(ts1_ARMA$residuals,, lag.max = 48)
+
+```
+
+```{r}
+
+forecast <- forecast(ts1_ARMA, h=3)
+
+print("Log of ARIMAX forecast values are")
+forecast$mean
+
+print("**************************************")
+print("Log of Test values are")
+log(ts_test)
+
+```
+
+#### Load the 2nd time serial: NZ monthly flight amount
+
+```{r}
+
+data2 <- read_csv("NZ_flights.csv", show_col_types = FALSE)
+head(data2)
+tail(data2)
+
+# Create a time series object
+data2$Date <- as.Date(data2$Date, format = "%Y-%m-%d")
+data2$Year <- year(data2$Date)
+data2$Month <- month(data2$Date)
+
+ts_data2 <- ts(data2$TOTAL_COUNT, start = c(1997, 9), frequency = 12)
+
+ts.plot(ts_data2,col="purple",lwd=1)
+
+start(ts_data2)
+end(ts_data2)
+ 
+```
+#### create the external factor time serial of monthly flight counts
+
+```{r}
+
+ts_flight <- window(ts_data2, start = c(2020, 4), end = c(2023, 4))
+head(ts_flight)
+tail(ts_flight)
+e_flight_factor = log(ts_flight)
+
+ts_flight_n <- window(ts_data2, start = c(2023, 5), end = c(2023, 7))
+ts_flight_n
+
+e_pre_factor <- log(ts_flight_n)
+
+```
+#### understand the correlation between time serial between flight and visitors
+
+```{r, warning = FALSE}
+
+lag2.plot(ts_flight, ts1, 12)
+
+```
+#### ts1 has the stronggest correlation coefficient with Lag0 of ts_flight
+
+#### create one plot of log(ts1) and log(ts_flight). Log transformation will put the data in the similar scale
+```{r, warning = FALSE}
+
+ts_flight_df <- data.frame(date = as.Date(time(ts_flight)), value = as.numeric(log(ts_flight)), series = "Log Flight Series")
+
+ts1_df <- data.frame(date = as.Date(time(ts1)), value = as.numeric(log(ts1)), series = "Log Visitor Series")
+
+ggplot() +
+  geom_line(data = ts_flight_df, aes(x = date, y = value, color = series), linewidth = 1) +
+  geom_line(data = ts1_df, aes(x = date, y = value, color = series), linewidth = 1) +
+  labs(color = "Legend")
+
+```
+
+#### ARIMAX model
+
+```{r}
+
+ts1_ARMAX <- arima(ts1_lg , order=c(2,0,0), xreg = e_flight_factor)
+
+summary(ts1_ARMAX)
+
+```
+#### check the residual
+```{r}
+
+tsdiag(ts1_ARMAX)
+
+ts.plot(ts1_ARMAX$resid)
+
+acf(ts1_ARMAX$resid, col="red",lwd=3, lag.max = 48)
+
+pacf(ts1_ARMAX$resid, col="green",lwd=3, lag.max = 48)
+
+```
+$$
+Y_t = 0.415 \times Y_{t-1} + 0.270 \times Y_{t-1} - 1.780 + 1.679 \times X_t + \varepsilon_t
+$$
+#### forest the next 3 values
+```{r}
+
+forecast <- predict(ts1_ARMAX, newxreg = e_pre_factor)
+forecast
+
+print("Log of ARIMAX forecast values are")
+forecast$pred
+print("**************************************")
+print("Log of Test values are")
+log(ts_test)
+
+```
+
+### RegARIMA - X-13ARIMA-SEATS
+
+```{r, warning = FALSE}
+
+checkX13()
+
+```
+#### In seas, default decomposition method is seats. add x11= "" to specify the x11 decomposition method
+```{r}
+
+ts2_lg = log(ts2)
+
+ts.plot(ts2_lg,col="darkgreen",lwd=1)
+grid(col = "lightgray", lty = "dotted")
+
+acf(ts2_lg, col="red",lwd=3, lag.max = 72)
+pacf(ts2_lg, col="green",lwd=3, lag.max = 72)
+
+```
+
+#### Peform the first difference to remove the trends
+```{r}
+ts2_lg_diff = diff(ts2_lg)
+
+acf(ts2_lg_diff, col="red",lwd=3, lag.max = 72)
+pacf(ts2_lg_diff, col="green",lwd=3, lag.max = 72)
+
+```
+
+```{r}
+ts2_ARIMA <- arima(ts2_lg , order=c(2,1,1),seasonal=list(order=c(1,1,1),period=12))
+
+summary(ts2_ARIMA)
+
+tsdiag(ts2_ARIMA)
+
+ts.plot(ts2_ARIMA$resid)
+
+acf(ts2_ARIMA$resid, col="red",lwd=3, lag.max = 48)
+
+pacf(ts2_ARIMA$resid, col="green",lwd=3, lag.max = 48)
+```
+
+```{r}
+
+seas_m2 <- seas(x = ts2_lg, 
+                regression.aictest = NULL, 
+                regression.variables = c("seasonal"))
+
+seas_m2
+```
+
+#### summary function is to see the ARIMA model and regression coefficients
+```{r}
+
+summary(seas_m2)
+
+```
+
+#### use series pacakge to output the x13-ARIMA-SEATS output tables
+
+"fct" will provide the next 12 forecast values
+
+```{r}
+series(seas_m2, "fct")
+```
+####  forecast  lowerci  upperci
+May 2023 11.96995 11.84861 12.09129
+Jun 2023 11.93051 11.80487 12.05615
+Jul 2023 12.14242 12.01992 12.26493
+
+```{r}
+
+log(ts_test)
+
+```
+
+####plot function
+
+plot the original and adjusted serial 
+
+```{r}
+
+plot(seas_m2)
+
+```
+
+#### SI plot, detrend and shows the seasonal and irregular componets
+```{r}
+
+monthplot(seas_m2)
+
+```
+
+```{r}
+plot(resid(seas_m2))
+
+```
+
+
+####understand teh residual (white noise)
+```{r}
+
+acf(resid(seas_m2))
+
+pacf(resid(seas_m2))
+
+```
+
+#### residual(white noise) would display wide-range frequencies but the energy levels are all very low
+```{r}
+
+spectrum(resid(seas_m2))
+
+```
+
+#### Density is residual/white noise (normal distribution ~ (0, N))
+```{r}
+
+plot(density(resid(seas_m2)))
+
+```
+
+#### Q-Q plot of residual
+```{r}
+
+qqnorm(resid(seas_m2))
+
+```
+
